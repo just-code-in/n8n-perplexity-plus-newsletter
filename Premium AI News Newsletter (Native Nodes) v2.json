@@ -1,0 +1,625 @@
+{
+  "name": "Premium AI News Newsletter (Native Nodes) v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c7880a11-1e8e-4b07-a3f0-7e29ca439110",
+      "name": "Daily at 5:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -432,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=5",
+        "options": {}
+      },
+      "id": "b29b7c44-9056-4746-80ca-34e3da829788",
+      "name": "Fetch arXiv XML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -224,
+        16
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a64df6df-72a7-4049-867c-51d3ec987f9a",
+      "name": "Parse arXiv XML",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format arXiv entries to standard article structure\nconst input = $input.first().json;\nconst feed = input.feed || {};\nconst entries = Array.isArray(feed.entry) ? feed.entry : [feed.entry].filter(Boolean);\n\nconst articles = entries.slice(0, 5).map(entry => {\n  // Extract authors\n  const authors = Array.isArray(entry.author) \n    ? entry.author.map(a => a.name?._).filter(Boolean)\n    : entry.author?.name?._ ? [entry.author.name._] : [];\n  \n  return {\n    title: entry.title?._ || entry.title || 'No title',\n    link: entry.id?._ || entry.id || '',\n    description: (entry.summary?._ || entry.summary || 'No abstract').replace(/\\s+/g, ' ').trim().substring(0, 500),\n    source: 'arXiv',\n    sourceType: 'research',\n    author: authors[0] || 'Unknown',\n    pubDate: entry.published?._ || entry.published,\n    isoDate: entry.published?._ || entry.published\n  };\n});\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "e1ded1a5-77f2-43d7-808c-f5c713ca579b",
+      "name": "Format arXiv Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://deepmind.google/blog/rss.xml",
+        "options": {}
+      },
+      "id": "67b8ca23-6548-47f5-ba20-62e9ef88e85c",
+      "name": "DeepMind Blog",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        320
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format DeepMind RSS to standard structure\nconst items = $input.all();\n\nconst articles = items.map(item => {\n  const data = item.json;\n  return {\n    title: data.title || 'No title',\n    link: data.link || data.url || '',\n    description: (data.contentSnippet || data.description || data.summary || 'No description').substring(0, 500),\n    source: 'DeepMind',\n    sourceType: 'announcement',\n    author: data.creator || data.author || 'Unknown',\n    pubDate: data.isoDate || data.pubDate,\n    isoDate: data.isoDate || data.pubDate\n  };\n});\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "bce6356a-0ecf-4746-8148-6df39bbf2e72",
+      "name": "Format DeepMind Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "content": "Find the 10 most significant AI and AI application news stories, breakthroughs, or announcements from the past 24 hours. For each story, provide: title (string), source (string), url (string), and summary (2 sentences max). Return ONLY a valid JSON array with these exact fields: [{\"title\": \"...\", \"source\": \"...\", \"url\": \"...\", \"summary\": \"...\"}]. No other text or formatting."
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "ad88172a-8524-4490-b99a-2559ceb550cd",
+      "name": "Perplexity Breaking News",
+      "type": "n8n-nodes-base.perplexity",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        624
+      ],
+      "credentials": {
+        "perplexityApi": {
+          "id": "YOUR_PERPLEXITY_CREDENTIAL_ID",
+          "name": "Perplexity API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Perplexity response and format to standard structure\nconst response = $input.first().json;\nlet newsItems = [];\n\ntry {\n  // The response should be in response.choices[0].message.content\n  const content = response.choices?.[0]?.message?.content || response.content || '';\n  \n  // Try to parse JSON from the content\n  // Remove markdown code blocks if present\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  newsItems = JSON.parse(cleanContent);\n  \n  if (!Array.isArray(newsItems)) {\n    newsItems = [];\n  }\n} catch (error) {\n  console.log('Perplexity parse error:', error.message);\n  newsItems = [];\n}\n\nconst articles = newsItems.slice(0, 10).map(item => ({\n  title: item.title || 'No title',\n  link: item.url || '',\n  description: item.summary || 'No summary',\n  source: item.source || 'Perplexity',\n  sourceType: 'news',\n  author: item.source || 'Perplexity',\n  pubDate: new Date().toISOString(),\n  isoDate: new Date().toISOString()\n}));\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "a3270b32-4c26-4ef1-b0d6-ecbd95dc09cb",
+      "name": "Format Perplexity Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "content": "Find 5 major AI product launches, funding announcements, or company news from the past 24 hours. For each story, provide: title (string), source (string), url (string), and summary (2 sentences max). Return ONLY a valid JSON array with these exact fields: [{\"title\": \"...\", \"source\": \"...\", \"url\": \"...\", \"summary\": \"...\"}]. No other text or formatting."
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "072c8b0f-0f28-432f-bd96-0e51cb95e304",
+      "name": "Perplexity Industry News",
+      "type": "n8n-nodes-base.perplexity",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        832
+      ],
+      "credentials": {
+        "perplexityApi": {
+          "id": "YOUR_PERPLEXITY_CREDENTIAL_ID",
+          "name": "Perplexity API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Perplexity response and format to standard structure\nconst response = $input.first().json;\nlet newsItems = [];\n\ntry {\n  const content = response.choices?.[0]?.message?.content || response.content || '';\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  newsItems = JSON.parse(cleanContent);\n  \n  if (!Array.isArray(newsItems)) {\n    newsItems = [];\n  }\n} catch (error) {\n  console.log('Perplexity Industry parse error:', error.message);\n  newsItems = [];\n}\n\nconst articles = newsItems.slice(0, 5).map(item => ({\n  title: item.title || 'No title',\n  link: item.url || '',\n  description: item.summary || 'No summary',\n  source: item.source || 'Perplexity',\n  sourceType: 'news',\n  author: item.source || 'Perplexity',\n  pubDate: new Date().toISOString(),\n  isoDate: new Date().toISOString()\n}));\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "e502feec-3928-4299-ad07-e199035b5c87",
+      "name": "Format Industry Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "content": "Find 5 significant AI research breakthroughs or academic announcements from the past 24 hours. For each story, provide: title (string), source (string), url (string), and summary (2 sentences max). Return ONLY a valid JSON array with these exact fields: [{\"title\": \"...\", \"source\": \"...\", \"url\": \"...\", \"summary\": \"...\"}]. No other text or formatting."
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "7d84d220-44ff-475e-9bd4-5d1c8d599609",
+      "name": "Perplexity Research News",
+      "type": "n8n-nodes-base.perplexity",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        1024
+      ],
+      "credentials": {
+        "perplexityApi": {
+          "id": "YOUR_PERPLEXITY_CREDENTIAL_ID",
+          "name": "Perplexity API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Perplexity response and format to standard structure\nconst response = $input.first().json;\nlet newsItems = [];\n\ntry {\n  const content = response.choices?.[0]?.message?.content || response.content || '';\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  newsItems = JSON.parse(cleanContent);\n  \n  if (!Array.isArray(newsItems)) {\n    newsItems = [];\n  }\n} catch (error) {\n  console.log('Perplexity Research parse error:', error.message);\n  newsItems = [];\n}\n\nconst articles = newsItems.slice(0, 5).map(item => ({\n  title: item.title || 'No title',\n  link: item.url || '',\n  description: item.summary || 'No summary',\n  source: item.source || 'Perplexity',\n  sourceType: 'announcement',\n  author: item.source || 'Perplexity',\n  pubDate: new Date().toISOString(),\n  isoDate: new Date().toISOString()\n}));\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "60e61117-cec8-4a84-a87a-d7f644e7ce35",
+      "name": "Format Research News Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "content": "Find 5 real-world AI application stories or case studies from the past 24 hours. For each story, provide: title (string), source (string), url (string), and summary (2 sentences max). Return ONLY a valid JSON array with these exact fields: [{\"title\": \"...\", \"source\": \"...\", \"url\": \"...\", \"summary\": \"...\"}]. No other text or formatting."
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "7f936f84-530b-4fd7-a042-3a1fea59625c",
+      "name": "Perplexity Applications",
+      "type": "n8n-nodes-base.perplexity",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        1232
+      ],
+      "credentials": {
+        "perplexityApi": {
+          "id": "YOUR_PERPLEXITY_CREDENTIAL_ID",
+          "name": "Perplexity API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Perplexity response and format to standard structure\nconst response = $input.first().json;\nlet newsItems = [];\n\ntry {\n  const content = response.choices?.[0]?.message?.content || response.content || '';\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  newsItems = JSON.parse(cleanContent);\n  \n  if (!Array.isArray(newsItems)) {\n    newsItems = [];\n  }\n} catch (error) {\n  console.log('Perplexity Applications parse error:', error.message);\n  newsItems = [];\n}\n\nconst articles = newsItems.slice(0, 5).map(item => ({\n  title: item.title || 'No title',\n  link: item.url || '',\n  description: item.summary || 'No summary',\n  source: item.source || 'Perplexity',\n  sourceType: 'news',\n  author: item.source || 'Perplexity',\n  pubDate: new Date().toISOString(),\n  isoDate: new Date().toISOString()\n}));\n\nreturn articles.map(article => ({ json: article }));"
+      },
+      "id": "f435e97e-4fe9-43b2-8746-4de5e36899d1",
+      "name": "Format Applications Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        1232
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "id": "4b45afa8-4738-4242-a2b6-b3c5cb5b8942",
+      "name": "Combine All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        384,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced deduplication with URL + title similarity\nconst items = $input.all();\nconst articles = items.map(item => item.json);\n\nif (articles.length === 0) {\n  return [{ json: { articles: [], count: 0 } }];\n}\n\n// Get previously sent articles\nconst sentArticles = $getWorkflowStaticData('node').sentArticles || {};\n\n// Clean up old entries (30 days)\nconst thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);\nfor (const link in sentArticles) {\n  if (sentArticles[link] < thirtyDaysAgo) {\n    delete sentArticles[link];\n  }\n}\n\n// Levenshtein distance for title similarity\nfunction levenshtein(a, b) {\n  const matrix = [];\n  for (let i = 0; i <= b.length; i++) matrix[i] = [i];\n  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;\n  for (let i = 1; i <= b.length; i++) {\n    for (let j = 1; j <= a.length; j++) {\n      if (b.charAt(i - 1) === a.charAt(j - 1)) {\n        matrix[i][j] = matrix[i - 1][j - 1];\n      } else {\n        matrix[i][j] = Math.min(\n          matrix[i - 1][j - 1] + 1,\n          matrix[i][j - 1] + 1,\n          matrix[i - 1][j] + 1\n        );\n      }\n    }\n  }\n  return matrix[b.length][a.length];\n}\n\nfunction similarity(a, b) {\n  const longer = a.length > b.length ? a : b;\n  const shorter = a.length > b.length ? b : a;\n  if (longer.length === 0) return 1.0;\n  return (longer.length - levenshtein(longer, shorter)) / longer.length;\n}\n\n// Filter duplicates\nconst newArticles = [];\nconst seenTitles = [];\n\nfor (const article of articles) {\n  const link = article.link || '';\n  const title = (article.title || '').toLowerCase();\n  \n  // Skip if URL already sent\n  if (link && sentArticles[link]) continue;\n  \n  // Skip if very similar title already processed\n  let isDuplicate = false;\n  for (const seenTitle of seenTitles) {\n    if (similarity(title, seenTitle) > 0.85) {\n      isDuplicate = true;\n      break;\n    }\n  }\n  \n  if (!isDuplicate) {\n    newArticles.push(article);\n    seenTitles.push(title);\n  }\n}\n\n// Sort by date and source type priority - NEWS FIRST!\nconst typePriority = { news: 3, announcement: 2, research: 1 };\nconst sortedArticles = newArticles\n  .filter(a => a.isoDate || a.pubDate)\n  .sort((a, b) => {\n    // First by type priority\n    const priorityDiff = (typePriority[b.sourceType] || 0) - (typePriority[a.sourceType] || 0);\n    if (priorityDiff !== 0) return priorityDiff;\n    \n    // Then by date\n    const dateA = new Date(a.isoDate || a.pubDate);\n    const dateB = new Date(b.isoDate || b.pubDate);\n    return dateB - dateA;\n  })\n  .slice(0, 25);\n\n// Format for AI\nconst formattedArticles = sortedArticles.map((article, index) => ({\n  index: index + 1,\n  title: article.title || 'No title',\n  link: article.link || '',\n  description: article.description || 'No description',\n  source: article.source || 'Unknown',\n  sourceType: article.sourceType || 'news',\n  date: article.isoDate || article.pubDate || ''\n}));\n\n// Mark as sent\nconst now = Date.now();\nformattedArticles.forEach(article => {\n  if (article.link) {\n    sentArticles[article.link] = now;\n  }\n});\n\n$getWorkflowStaticData('node').sentArticles = sentArticles;\n\nreturn [{ json: { articles: formattedArticles, count: formattedArticles.length } }];"
+      },
+      "id": "29c1be29-e592-42b9-977e-0a877d5fac94",
+      "name": "Deduplicate & Prioritize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert AI news curator creating a premium daily newsletter for AI professionals.\n\nI have {{ $json.count }} articles from multiple premium sources:\n- 🔬 Research: arXiv papers (cutting-edge research)\n- 📢 Announcements: Official blogs from OpenAI, Anthropic, DeepMind, Meta\n- 📰 News: Curated breaking news from Perplexity\n\nYour task:\n1. Select the 8-10 MOST SIGNIFICANT and IMPACTFUL stories\n2. **ENSURE DIVERSITY**: Select 2-3 news items, 2-3 announcements, and 3-4 research papers for a balanced newsletter\n3. Prioritize: Breaking news > Major announcements > Breakthrough research\n4. For each story:\n   - Write a compelling headline (can rephrase)\n   - Write 2-3 sentences explaining WHY this matters to AI professionals\n   - Assess impact: \"High\" or \"Medium\"\n   - Keep the original link and source\n   - Preserve the sourceType (research/announcement/news)\n\n5. Write an \"Editor's Note\" (2-3 sentences) highlighting the main theme\n\nArticles:\n{{ JSON.stringify($json.articles, null, 2) }}\n\nReturn ONLY valid JSON in this exact format:\n{\n  \"editorsNote\": \"Overview of key trends\",\n  \"stories\": [\n    {\n      \"headline\": \"Compelling headline\",\n      \"summary\": \"Why this matters (2-3 sentences)\",\n      \"impact\": \"High\",\n      \"link\": \"original URL\",\n      \"source\": \"source name\",\n      \"type\": \"research\"\n    }\n  ]\n}",
+        "hasOutputParser": true
+      },
+      "id": "6f0fc1e2-a2c8-426a-9620-d082234c8f0e",
+      "name": "AI News Curator",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        784,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "id": "e294f743-97f1-43e7-afb2-dc5ddac4ff1b",
+      "name": "Claude Sonnet 4.5",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        816
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n    \"editorsNote\": \"This week showcases significant advances in video generation and multimodal AI, with breakthrough research in minute-scale video synthesis, physics-guided generation, and cross-modal reasoning. Interactive training frameworks and improved embedding models signal a maturation of foundational AI infrastructure.\",\n    \"stories\": [\n      {\n        \"headline\": \"Self-Forcing++ Achieves Minute-Scale High-Quality Video Generation\",\n        \"summary\": \"Researchers develop a new autoregressive approach that can generate high-quality videos at minute-scale lengths, addressing the computational bottlenecks of transformer-based diffusion models. This breakthrough could revolutionize video content creation and enable new applications in entertainment, education, and simulation.\",\n        \"impact\": \"High\",\n        \"link\": \"http://arxiv.org/abs/2510.02283v1\",\n        \"source\": \"arXiv\",\n        \"type\": \"research\"\n      },\n      {\n        \"headline\": \"KineMask Introduces Physics-Guided Video Generation for Realistic Object Interactions\",\n        \"summary\": \"A new video diffusion model incorporates physics constraints to generate realistic object interactions, bridging the gap between creative video generation and practical world simulation. This advancement is crucial for robotics applications and embodied AI systems that need physically plausible training data.\",\n        \"impact\": \"High\",\n        \"link\": \"http://arxiv.org/abs/2510.02284v1\",\n        \"source\": \"arXiv\",\n        \"type\": \"research\"\n      }\n    ]\n  }"
+      },
+      "id": "254a6bee-b6da-4dc0-918b-5e503e68c385",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response and create beautiful HTML newsletter\nconst aiResponse = $input.first().json;\n\n// Handle both direct JSON and wrapped output\nlet newsletter = aiResponse.output || aiResponse;\n\n// Fallback if parsing fails\nif (!newsletter.stories || !Array.isArray(newsletter.stories)) {\n  newsletter = {\n    editorsNote: \"Today's AI news highlights\",\n    stories: []\n  };\n}\n\nconst currentDate = new Date().toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\n// Type badges configuration\nconst typeBadges = {\n  research: { emoji: '🔬', label: 'Research', color: '#8B5CF6' },\n  announcement: { emoji: '📢', label: 'Announcement', color: '#3B82F6' },\n  news: { emoji: '📰', label: 'News', color: '#10B981' }\n};\n\n// Impact badge configuration\nconst impactColors = {\n  'High': '#EF4444',\n  'Medium': '#F59E0B'\n};\n\n// Generate stories HTML\nlet storiesHtml = '';\nif (newsletter.stories && newsletter.stories.length > 0) {\n  storiesHtml = newsletter.stories.map((story, index) => {\n    const badge = typeBadges[story.type] || typeBadges.news;\n    const impactColor = impactColors[story.impact] || impactColors.Medium;\n    return `\n      <div style=\"margin-bottom: 25px; padding-bottom: 25px; border-bottom: 1px solid #e9ecef;\">\n        <div style=\"margin-bottom: 10px;\">\n          <span style=\"display: inline-block; padding: 4px 12px; background-color: ${badge.color}; color: #ffffff; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 8px;\">${badge.emoji} ${badge.label}</span>\n          <span style=\"display: inline-block; padding: 4px 12px; background-color: ${impactColor}; color: #ffffff; border-radius: 12px; font-size: 12px; font-weight: 600;\">${story.impact} Impact</span>\n        </div>\n        <h3 style=\"margin: 12px 0; color: #212529; font-size: 20px; font-weight: 600; line-height: 1.4;\">\n          ${index + 1}. ${story.headline}\n        </h3>\n        <p style=\"margin: 0 0 12px 0; color: #495057; font-size: 15px; line-height: 1.6;\">\n          ${story.summary}\n        </p>\n        <div style=\"display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;\">\n          <span style=\"color: #6c757d; font-size: 13px; font-style: italic;\">📰 ${story.source}</span>\n          <a href=\"${story.link}\" style=\"display: inline-block; padding: 8px 16px; background-color: #667eea; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 500; margin-top: 8px;\">Read More →</a>\n        </div>\n      </div>\n    `;\n  }).join('');\n} else {\n  storiesHtml = '<p style=\"color: #6c757d; text-align: center; padding: 20px 0;\">No stories available today.</p>';\n}\n\n// Build HTML email\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Premium AI Newsletter</title>\n</head>\n<body style=\"margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;\">\n  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color: #f5f5f5; padding: 20px 0;\">\n    <tr>\n      <td align=\"center\">\n        <table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);\">\n          <!-- Header -->\n          <tr>\n            <td style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; border-radius: 8px 8px 0 0;\">\n              <h1 style=\"margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; text-align: center;\">🤖 Premium AI Newsletter</h1>\n              <p style=\"margin: 10px 0 0 0; color: #ffffff; font-size: 16px; text-align: center; opacity: 0.95;\">${currentDate}</p>\n            </td>\n          </tr>\n          \n          <!-- Editor's Note -->\n          <tr>\n            <td style=\"padding: 30px 30px 20px 30px;\">\n              <div style=\"background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; border-radius: 4px;\">\n                <h2 style=\"margin: 0 0 10px 0; color: #667eea; font-size: 18px; font-weight: 600;\">📝 Editor's Note</h2>\n                <p style=\"margin: 0; color: #495057; font-size: 15px; line-height: 1.6;\">${newsletter.editorsNote || \"Welcome to today's AI news digest!\"}</p>\n              </div>\n            </td>\n          </tr>\n          \n          <!-- Stories -->\n          <tr>\n            <td style=\"padding: 0 30px 30px 30px;\">\n              ${storiesHtml}\n            </td>\n          </tr>\n          \n          <!-- Footer -->\n          <tr>\n            <td style=\"padding: 20px 30px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; border-top: 1px solid #e9ecef;\">\n              <p style=\"margin: 0; color: #6c757d; font-size: 13px; text-align: center; line-height: 1.6;\">\n                Curated by AI from premium sources: arXiv, OpenAI, Anthropic, DeepMind, Meta, and Perplexity<br>\n                Powered by n8n & Claude Sonnet 4.5\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    html: html,\n    subject: `🤖 Premium AI Newsletter - ${currentDate}`,\n    storiesCount: newsletter.stories ? newsletter.stories.length : 0\n  }\n}];"
+      },
+      "id": "3ccd0fe4-0022-4e65-b6c6-d9b042e01c18",
+      "name": "Generate Premium HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "dca9fccf-16e6-482b-a86a-0880e266aa38",
+      "name": "Send via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1216,
+        576
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily at 5:00 AM": {
+      "main": [
+        [
+          {
+            "node": "Fetch arXiv XML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepMind Blog",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Perplexity Breaking News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Perplexity Industry News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Perplexity Research News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Perplexity Applications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch arXiv XML": {
+      "main": [
+        [
+          {
+            "node": "Parse arXiv XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse arXiv XML": {
+      "main": [
+        [
+          {
+            "node": "Format arXiv Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format arXiv Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepMind Blog": {
+      "main": [
+        [
+          {
+            "node": "Format DeepMind Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format DeepMind Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Perplexity Breaking News": {
+      "main": [
+        [
+          {
+            "node": "Format Perplexity Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Perplexity Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Perplexity Industry News": {
+      "main": [
+        [
+          {
+            "node": "Format Industry Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Industry Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Perplexity Research News": {
+      "main": [
+        [
+          {
+            "node": "Format Research News Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Research News Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Perplexity Applications": {
+      "main": [
+        [
+          {
+            "node": "Format Applications Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Applications Data": {
+      "main": [
+        [
+          {
+            "node": "Combine All Sources",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Combine All Sources": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate & Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate & Prioritize": {
+      "main": [
+        [
+          {
+            "node": "AI News Curator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI News Curator": {
+      "main": [
+        [
+          {
+            "node": "Generate Premium HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet 4.5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI News Curator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI News Curator",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Premium HTML": {
+      "main": [
+        [
+          {
+            "node": "Send via Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
