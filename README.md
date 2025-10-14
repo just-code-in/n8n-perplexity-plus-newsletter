@@ -1,8 +1,8 @@
-AI News Newsletter (Perplexity Plus)
+# AI News Newsletter (Perplexity plus)
 
 An automated daily AI newsletter workflow powered by n8n, Perplexity AI, and Claude Sonnet 4.5. This workflow curates premium AI news from multiple sources and delivers a beautifully formatted HTML newsletter to your inbox every morning.
 
-## 📋 Overview
+## Overview
 
 This workflow aggregates AI news from **6 premium sources** to create a balanced, professional newsletter featuring:
 
@@ -15,13 +15,19 @@ This workflow aggregates AI news from **6 premium sources** to create a balanced
 ### Key Features
 
 ✨ **AI-Powered Curation** - Claude Sonnet 4.5 selects and summarizes the most significant stories
+
 🎯 **Balanced Content** - Automatically ensures diversity across news, research, and announcements
+
 🔄 **Smart Deduplication** - Uses Levenshtein distance to detect and filter duplicate stories
-📧 **Beautiful HTML Emails** - Professional newsletter design with color-coded badges
+
+📧 ** HTML Emails** - Professional newsletter design with color-coded badges
+
 ⏰ **Daily Automation** - Runs every morning at 5:00 AM
+
 💾 **State Management** - Tracks sent articles to prevent duplicates (30-day retention)
 
-## 🏗️ Architecture
+
+## Architecture
 
 ### Workflow Structure
 
@@ -59,7 +65,7 @@ Each newsletter features **8-10 carefully curated stories** with:
 - Professional summaries explaining relevance to AI practitioners
 - Source attribution and direct links
 
-## 🚀 Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -136,7 +142,7 @@ Edit the **AI News Curator** prompt to:
 - Adjust content balance (currently 2-3 news, 2-3 announcements, 3-4 research)
 - Modify tone or style preferences
 
-## 📊 Node Details
+## Node Details
 
 | Node | Type | Purpose |
 |------|------|---------|
@@ -159,7 +165,7 @@ Edit the **AI News Curator** prompt to:
 | Generate Premium HTML | Code | Creates newsletter HTML |
 | Send via Gmail | Gmail | Delivers email |
 
-## 🎨 Newsletter Design
+## Newsletter Design
 
 The generated newsletter features:
 
@@ -173,7 +179,7 @@ The generated newsletter features:
 - **Gradient header** - Purple-to-violet brand aesthetic
 - **Editor's Note** - AI-generated daily theme summary
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### No newsletter received
 - Check workflow execution history for errors
@@ -199,7 +205,7 @@ The generated newsletter features:
 
 This workflow is provided as-is for personal and commercial use. Attribution appreciated but not required.
 
-## 🤝 Contributing
+## Contributing
 
 Found a bug or have an enhancement idea?
 
@@ -207,7 +213,7 @@ Found a bug or have an enhancement idea?
 2. Make your changes
 3. Submit a pull request
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **n8n** - Open-source workflow automation
 - **Perplexity AI** - Real-time news aggregation
@@ -215,7 +221,7 @@ Found a bug or have an enhancement idea?
 - **arXiv** - Open-access research repository
 - **DeepMind** - AI research announcements
 
-## 📞 Support
+## Support
 
 For questions or issues:
 - Open an issue on GitHub
