@@ -1,4 +1,4 @@
-# 🤖 Premium AI News Newsletter (Perplexity Plus)
+AI News Newsletter (Perplexity Plus)
 
 An automated daily AI newsletter workflow powered by n8n, Perplexity AI, and Claude Sonnet 4.5. This workflow curates premium AI news from multiple sources and delivers a beautifully formatted HTML newsletter to your inbox every morning.
 
